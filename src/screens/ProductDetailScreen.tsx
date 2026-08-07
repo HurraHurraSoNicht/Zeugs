@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Breadcrumb from '../components/Breadcrumb';
+import { useAuth } from '../hooks/useAuth';
 import { useProducts } from '../hooks/useProducts';
 import { fetchMyRating } from '../services/ratingsApi';
 import { colors } from '../theme/colors';
@@ -85,6 +86,7 @@ function VoteStars({
 
 export default function ProductDetailScreen({ route, navigation }: Props) {
   const { productId } = route.params;
+  const { isAdmin } = useAuth();
   const { getProductById, rateProduct } = useProducts();
   const product = getProductById(productId);
   const [copied, setCopied] = useState(false);
@@ -185,18 +187,20 @@ export default function ProductDetailScreen({ route, navigation }: Props) {
           {voteError ? <Text style={styles.voteErrorText}>{voteError}</Text> : null}
         </View>
 
-        <View style={styles.idRow}>
-          <Text style={styles.idLabel}>ID:</Text>
-          <Text style={styles.idText} selectable>
-            {product.id}
-          </Text>
-          <Pressable
-            onPress={handleCopyId}
-            style={({ pressed }) => [styles.copyButton, pressed && styles.copyButtonPressed]}
-          >
-            <Text style={styles.copyButtonText}>{copied ? 'Kopiert ✓' : 'Kopieren'}</Text>
-          </Pressable>
-        </View>
+        {isAdmin ? (
+          <View style={styles.idRow}>
+            <Text style={styles.idLabel}>ID:</Text>
+            <Text style={styles.idText} selectable>
+              {product.id}
+            </Text>
+            <Pressable
+              onPress={handleCopyId}
+              style={({ pressed }) => [styles.copyButton, pressed && styles.copyButtonPressed]}
+            >
+              <Text style={styles.copyButtonText}>{copied ? 'Kopiert ✓' : 'Kopieren'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <Text style={styles.dateText}>Hinzugefügt am {formatDate(product.discoveredAt)}</Text>
 
         {product.tags.length > 0 ? (

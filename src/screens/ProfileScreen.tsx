@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAuth } from '../hooks/useAuth';
 import { uploadProfileImage } from '../services/profileImagesApi';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
@@ -37,9 +38,25 @@ const EMPTY_PROFILE: ProfileFormState = {
 };
 
 export default function ProfileScreen() {
+  const { signOut } = useAuth();
   const [profile, setProfile] = useState<ProfileFormState>(EMPTY_PROFILE);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    setLogoutError(null);
+    try {
+      await signOut();
+      // No further navigation needed — App.tsx swaps to the Login screen
+      // automatically as soon as AuthProvider's session state clears.
+    } catch (err) {
+      setLogoutError(err instanceof Error ? err.message : 'Abmelden fehlgeschlagen.');
+      setLoggingOut(false);
+    }
+  };
 
   const updateField = <K extends keyof ProfileFormState>(key: K, value: ProfileFormState[K]) => {
     setProfile((current) => ({ ...current, [key]: value }));
@@ -182,6 +199,24 @@ export default function ProfileScreen() {
           onChangeText={(text) => updateField('birthDate', text)}
         />
       </View>
+
+      <View style={styles.logoutRow}>
+        {logoutError ? <Text style={styles.errorText}>{logoutError}</Text> : null}
+        <Pressable
+          onPress={handleLogout}
+          disabled={loggingOut}
+          style={({ pressed }) => [
+            styles.logoutButton,
+            pressed && !loggingOut && styles.logoutButtonPressed,
+          ]}
+        >
+          {loggingOut ? (
+            <ActivityIndicator color={colors.danger} />
+          ) : (
+            <Text style={styles.logoutButtonText}>Abmelden</Text>
+          )}
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -266,5 +301,27 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     color: colors.text,
     backgroundColor: '#fafafa',
+  },
+  logoutRow: {
+    alignItems: 'flex-end',
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  logoutButton: {
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutButtonPressed: {
+    opacity: 0.6,
+  },
+  logoutButtonText: {
+    color: colors.danger,
+    fontSize: 14,
+    fontFamily: fonts.bodyMedium,
   },
 });
