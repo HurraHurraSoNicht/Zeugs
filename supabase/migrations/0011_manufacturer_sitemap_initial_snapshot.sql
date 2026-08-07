@@ -1,0 +1,22 @@
+-- 0011_manufacturer_sitemap_initial_snapshot.sql
+--
+-- The first time a manufacturer is scraped, registerManufacturerIfNew (see
+-- supabase/functions/scrape-product/index.ts) bulk-inserts every URL already
+-- in that manufacturer's sitemap in one go — most of which are typically
+-- years old, not newly added products. Every one of those rows previously
+-- got the same first_seen_at as a genuinely new URL discovered later, so the
+-- Admin "Neue Produkte gefunden" view (filtered by "first_seen_at within the
+-- last 7 days") showed the entire initial dump as "new" right after adding a
+-- manufacturer.
+--
+-- This column distinguishes the two: true for rows from that one-time
+-- initial crawl, false for rows discovered by a later re-check (see the
+-- recheckManufacturerSitemap addition in the same Edge Function) — only
+-- those should ever surface as "neu gefunden".
+--
+-- Defaults to true so both existing rows (all of which came from an initial
+-- crawl, since no re-check job existed before this migration) and any future
+-- insert that doesn't explicitly say otherwise are conservatively excluded
+-- from "new" rather than wrongly included.
+alter table public.manufacturer_sitemap_entries
+  add column if not exists initial_snapshot boolean not null default true;
