@@ -21,6 +21,7 @@ import { useSignalWordFilter } from '../hooks/useSignalWordFilter';
 import { useAutomationSettings } from '../hooks/useAutomationSettings';
 import { scrapeProductFromUrl } from '../services/productScraper';
 import { getProductByBarcode, searchProducts, type OpenFoodFactsSearchResult } from '../services/openFoodFacts';
+import { deleteUserAccount, findUserByEmail, type AdminUser } from '../services/usersApi';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import type { Product } from '../types/product';
@@ -123,7 +124,7 @@ function NewSitemapEntryRow({ entry }: { entry: NewSitemapEntry }) {
   );
 }
 
-type Section = 'products' | 'articles' | 'newProducts';
+type Section = 'products' | 'articles' | 'newProducts' | 'users';
 
 export default function AdminScreen() {
   const { addProduct, editProduct, removeProduct, getProductById } = useProducts();
@@ -412,6 +413,54 @@ export default function AdminScreen() {
     }
   };
 
+  // Nutzerverwaltung: search a user by exact email, then delete on confirm.
+  const [userEmailQuery, setUserEmailQuery] = useState('');
+  const [userSearchStatus, setUserSearchStatus] = useState<Status>('idle');
+  const [userSearchMessage, setUserSearchMessage] = useState<string | null>(null);
+  const [foundUser, setFoundUser] = useState<AdminUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  const handleSearchUser = async () => {
+    const trimmed = userEmailQuery.trim();
+    if (!trimmed || userSearchStatus === 'loading') {
+      return;
+    }
+    setUserSearchStatus('loading');
+    setUserSearchMessage(null);
+    setFoundUser(null);
+    try {
+      const user = await findUserByEmail(trimmed);
+      setUserSearchStatus('idle');
+      if (!user) {
+        setUserSearchMessage('Kein Nutzer mit dieser E-Mail-Adresse gefunden.');
+      }
+      setFoundUser(user);
+    } catch (error) {
+      setUserSearchStatus('error');
+      setUserSearchMessage(error instanceof Error ? error.message : 'Unbekannter Fehler bei der Suche.');
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!foundUser || deletingUser) {
+      return;
+    }
+    setDeletingUser(true);
+    try {
+      await deleteUserAccount(foundUser.id);
+      setUserSearchMessage(`Nutzer „${foundUser.email}" wurde gelöscht.`);
+      setFoundUser(null);
+      setUserEmailQuery('');
+    } catch (error) {
+      setUserSearchStatus('error');
+      setUserSearchMessage(error instanceof Error ? error.message : 'Löschen fehlgeschlagen.');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
+  const userSearchDisabled = userSearchStatus === 'loading' || !userEmailQuery.trim();
+
   const searchDisabled = searchStatus === 'loading' || !query.trim() || cooldownSeconds > 0;
   const urlDisabled = urlStatus === 'loading' || !url.trim();
   const updateLoadDisabled = !updateIdInput.trim();
@@ -444,6 +493,14 @@ export default function AdminScreen() {
         >
           <Text style={[styles.subNavButtonText, section === 'newProducts' && styles.subNavButtonTextActive]}>
             Neue Produkte gefunden
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setSection('users')}
+          style={[styles.subNavButton, section === 'users' && styles.subNavButtonActive]}
+        >
+          <Text style={[styles.subNavButtonText, section === 'users' && styles.subNavButtonTextActive]}>
+            Nutzerverwaltung
           </Text>
         </Pressable>
       </View>
@@ -700,7 +757,7 @@ export default function AdminScreen() {
             )}
           </View>
         )
-      ) : (
+      ) : section === 'newProducts' ? (
         <View style={styles.form}>
           <Text style={styles.label}>Neue Produkte gefunden</Text>
           <Text style={styles.cooldownHint}>
@@ -757,6 +814,71 @@ export default function AdminScreen() {
               )}
             </>
           )}
+        </View>
+      ) : (
+        <View style={styles.form}>
+          <Text style={styles.label}>Nutzer suchen</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="E-Mail-Adresse"
+            placeholderTextColor="#999"
+            value={userEmailQuery}
+            onChangeText={(text) => {
+              setUserEmailQuery(text);
+              setUserSearchStatus('idle');
+              setUserSearchMessage(null);
+              setFoundUser(null);
+            }}
+            onSubmitEditing={handleSearchUser}
+            returnKeyType="search"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={userSearchStatus !== 'loading'}
+          />
+
+          <Pressable
+            onPress={handleSearchUser}
+            disabled={userSearchDisabled}
+            style={({ pressed }) => [
+              styles.button,
+              userSearchDisabled && styles.buttonDisabled,
+              pressed && !userSearchDisabled && styles.buttonPressed,
+            ]}
+          >
+            {userSearchStatus === 'loading' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Suchen</Text>
+            )}
+          </Pressable>
+
+          {userSearchMessage ? (
+            <Text style={[styles.message, userSearchStatus === 'error' && styles.messageError]}>
+              {userSearchMessage}
+            </Text>
+          ) : null}
+
+          {foundUser ? (
+            <View style={styles.resultRow}>
+              <View style={styles.resultInfo}>
+                <Text style={styles.resultName}>{foundUser.email}</Text>
+                <Text style={styles.resultBrand}>Registriert seit {formatDaysAgo(foundUser.createdAt)}</Text>
+              </View>
+              <Pressable
+                onPress={handleDeleteUser}
+                disabled={deletingUser}
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  styles.userDeleteButton,
+                  deletingUser && styles.deleteButtonDisabled,
+                  pressed && !deletingUser && styles.buttonPressed,
+                ]}
+              >
+                {deletingUser ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Löschen</Text>}
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       )}
     </ScrollView>
@@ -855,6 +977,10 @@ const styles = StyleSheet.create({
   },
   deleteButtonDisabled: {
     backgroundColor: '#e59a9a',
+  },
+  userDeleteButton: {
+    marginTop: 0,
+    paddingHorizontal: 16,
   },
   buttonText: {
     color: '#fff',

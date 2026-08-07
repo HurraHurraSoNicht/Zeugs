@@ -40,6 +40,8 @@ const TAB_ICONS: Record<keyof TabParamList, string> = {
 };
 
 function Tabs() {
+  const { isAdmin } = useAuth();
+
   return (
     <Tab.Navigator
       // Default backBehavior is 'firstRoute' (always Home) — 'history' makes
@@ -60,7 +62,9 @@ function Tabs() {
       */}
       <Tab.Screen name="SnackEZine" component={SnackEZineScreen} options={{ title: 'Snack-e-zine', headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil' }} />
-      <Tab.Screen name="Admin" component={AdminScreen} options={{ title: 'Admin', headerShown: false }} />
+      {isAdmin ? (
+        <Tab.Screen name="Admin" component={AdminScreen} options={{ title: 'Admin', headerShown: false }} />
+      ) : null}
       {/* Reachable only via navigate() from a product card / article teaser —
           kept out of the tab bar itself (tabBarButton: () => null) so the
           bar stays visible instead of disappearing like it would as a

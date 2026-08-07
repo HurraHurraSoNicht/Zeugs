@@ -3,9 +3,14 @@ import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { getSupabase } from '../services/supabaseClient';
 
+// Hardcoded for now — no roles table yet, see the "neue Nutzerrollen" task.
+// Revisit once there's more than one admin or a real role system.
+const ADMIN_EMAIL = 'nl@snakkers.de';
+
 interface AuthContextValue {
   session: Session | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: (email: string, password: string, captchaToken?: string) => Promise<void>;
   // Resolves to `{ confirmationRequired: true }` when Supabase didn't return
   // a session (email confirmation is on for this project) — the caller
@@ -77,7 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value = useMemo(() => ({ session, loading, signIn, signUp, signOut }), [session, loading]);
+  const isAdmin = session?.user?.email === ADMIN_EMAIL;
+
+  const value = useMemo(
+    () => ({ session, loading, isAdmin, signIn, signUp, signOut }),
+    [session, loading, isAdmin],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
