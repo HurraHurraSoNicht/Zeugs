@@ -167,6 +167,11 @@ export default function AdminScreen() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Set only when pendingProduct came from the URL scraper (see
+  // handleAddFromUrl) — Open Food Facts results and manual edits never touch
+  // a manufacturer's sitemap, so this stays null for those and the
+  // save-success message below skips the sitemap line entirely.
+  const [scrapedHasSitemap, setScrapedHasSitemap] = useState<boolean | null>(null);
 
   // Primary: text search against Open Food Facts (no barcodes on hand).
   const [query, setQuery] = useState('');
@@ -235,6 +240,7 @@ export default function AdminScreen() {
     }
     setAddingCode(result.code);
     setSearchMessage(null);
+    setScrapedHasSitemap(null);
     try {
       const product = await getProductByBarcode(result.code);
       setPendingProduct(product);
@@ -253,9 +259,11 @@ export default function AdminScreen() {
     setUrlStatus('loading');
     setUrlMessage(null);
     setSaveError(null);
+    setScrapedHasSitemap(null);
     try {
-      const product = await scrapeProductFromUrl(trimmedUrl);
+      const { product, hasSitemap } = await scrapeProductFromUrl(trimmedUrl);
       setPendingProduct(product);
+      setScrapedHasSitemap(hasSitemap);
       setUrlStatus('idle');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler beim Scrapen.';
@@ -284,6 +292,7 @@ export default function AdminScreen() {
     setLoadMessage(null);
     setEditingProductId(existing.id);
     setPendingProduct(existing);
+    setScrapedHasSitemap(null);
   };
 
   const handleSaveProduct = async () => {
@@ -301,10 +310,17 @@ export default function AdminScreen() {
         setEditingProductId(null);
       } else {
         const saved = await addProduct(pendingProduct);
-        setSearchMessage(`„${saved.name}" wurde in Supabase gespeichert (ID: ${saved.id}).`);
+        const sitemapNote =
+          scrapedHasSitemap === null
+            ? ''
+            : scrapedHasSitemap
+              ? ' Sitemap erstellt.'
+              : ' Sitemap konnte nicht erstellt werden.';
+        setSearchMessage(`„${saved.name}" wurde in Supabase gespeichert (ID: ${saved.id}).${sitemapNote}`);
         setResults([]);
         setQuery('');
         setUrl('');
+        setScrapedHasSitemap(null);
       }
       setPendingProduct(null);
     } catch (error) {

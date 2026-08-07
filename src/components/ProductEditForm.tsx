@@ -227,7 +227,7 @@ export default function ProductEditForm({
       <Text style={styles.sectionTitle}>{title}</Text>
 
       {product.imageUrl ? (
-        <Image source={{ uri: product.imageUrl }} style={styles.image} />
+        <Image source={{ uri: product.imageUrl }} style={styles.image} resizeMode="contain" />
       ) : (
         <View style={[styles.image, styles.imagePlaceholder]} />
       )}
@@ -439,6 +439,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 8,
     marginBottom: 12,
+    backgroundColor: '#f0f0f0',
   },
   imagePlaceholder: {
     backgroundColor: '#e5e5e5',

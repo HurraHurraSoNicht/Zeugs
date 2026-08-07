@@ -10,6 +10,12 @@ interface ScrapeProductResponse {
   imageUrl: string | null;
   nutrition: NutritionFacts | null;
   sourceUrl: string;
+  hasSitemap: boolean;
+}
+
+export interface ScrapedProduct {
+  product: Product;
+  hasSitemap: boolean;
 }
 
 function generateId(): string {
@@ -20,7 +26,7 @@ function generateId(): string {
 // Function so it runs server-to-server (no browser CORS) and works the same
 // on web and native. Requires a real Supabase project (see .env.example) with
 // that function deployed.
-export async function scrapeProductFromUrl(url: string): Promise<Product> {
+export async function scrapeProductFromUrl(url: string): Promise<ScrapedProduct> {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
@@ -40,20 +46,23 @@ export async function scrapeProductFromUrl(url: string): Promise<Product> {
   }
 
   return {
-    id: generateId(),
-    name: data.name,
-    brand: data.brand,
-    quantity: data.quantity,
-    description: data.description,
-    imageUrl: data.imageUrl,
-    source: 'scraper:edge-function',
-    sourceUrl: data.sourceUrl,
-    category: null,
-    discoveredAt: new Date().toISOString(),
-    averageRating: 0,
-    ratingsCount: 0,
-    tags: [],
-    categories: [],
-    nutrition: data.nutrition,
+    product: {
+      id: generateId(),
+      name: data.name,
+      brand: data.brand,
+      quantity: data.quantity,
+      description: data.description,
+      imageUrl: data.imageUrl,
+      source: 'scraper:edge-function',
+      sourceUrl: data.sourceUrl,
+      category: null,
+      discoveredAt: new Date().toISOString(),
+      averageRating: 0,
+      ratingsCount: 0,
+      tags: [],
+      categories: [],
+      nutrition: data.nutrition,
+    },
+    hasSitemap: data.hasSitemap,
   };
 }

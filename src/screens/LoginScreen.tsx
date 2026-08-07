@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import TurnstileWidget from '../components/TurnstileWidget';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
@@ -48,6 +60,14 @@ export default function LoginScreen({ navigation }: Props) {
       setCaptchaResetSignal((current) => current + 1);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenImpressum = () => {
+    if (Platform.OS === 'web') {
+      window.open(`${window.location.origin}/impressum.html`, '_blank');
+    } else {
+      Linking.openURL('https://www.snakkers.de/impressum.html');
     }
   };
 
@@ -129,6 +149,10 @@ export default function LoginScreen({ navigation }: Props) {
           <Text style={styles.registerLinkTextBold}>
             Jetzt turboschnell, kostenfrei und easy registrieren!
           </Text>
+        </Pressable>
+
+        <Pressable onPress={handleOpenImpressum} style={styles.impressumLink}>
+          <Text style={styles.impressumLinkText}>Impressum</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -230,5 +254,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     color: colors.primary,
     textAlign: 'center',
+  },
+  impressumLink: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  impressumLinkText: {
+    fontSize: 12,
+    fontFamily: fonts.body,
+    color: colors.textMuted,
+    textDecorationLine: 'underline',
   },
 });

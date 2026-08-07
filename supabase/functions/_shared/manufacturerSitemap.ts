@@ -192,8 +192,9 @@ export async function recheckManufacturerSitemap(
   supabaseAdmin: SupabaseClient,
   manufacturerId: string,
   hostname: string,
-): Promise<{ newCount: number }> {
+): Promise<{ newCount: number; hasSitemap: boolean }> {
   const sitemapResult = await discoverAndFetchSitemap(hostname);
+  const hasSitemap = sitemapResult != null;
 
   await supabaseAdmin
     .from('manufacturers')
@@ -204,7 +205,7 @@ export async function recheckManufacturerSitemap(
     .eq('id', manufacturerId);
 
   if (!sitemapResult || sitemapResult.entries.length === 0) {
-    return { newCount: 0 };
+    return { newCount: 0, hasSitemap };
   }
 
   const { data: existingRows } = await supabaseAdmin
@@ -215,11 +216,11 @@ export async function recheckManufacturerSitemap(
 
   const newEntries = sitemapResult.entries.filter((entry) => !existingUrls.has(entry.url));
   if (newEntries.length === 0) {
-    return { newCount: 0 };
+    return { newCount: 0, hasSitemap };
   }
 
   const inserted = await insertSitemapEntryRows(supabaseAdmin, manufacturerId, newEntries, false);
-  return { newCount: inserted };
+  return { newCount: inserted, hasSitemap };
 }
 
 // Registers a manufacturer (by hostname) and its sitemap the first time any
@@ -232,19 +233,22 @@ export async function recheckManufacturerSitemap(
 export async function registerOrRecheckManufacturer(
   supabaseAdmin: SupabaseClient,
   hostname: string,
-): Promise<void> {
+): Promise<{ hasSitemap: boolean }> {
   const { data: existing } = await supabaseAdmin
     .from('manufacturers')
-    .select('id, sitemap_checked_at')
+    .select('id, sitemap_checked_at, sitemap_url')
     .eq('hostname', hostname)
     .maybeSingle();
 
   if (existing) {
     const lastChecked = existing.sitemap_checked_at ? new Date(existing.sitemap_checked_at as string).getTime() : 0;
     if (Date.now() - lastChecked >= RECHECK_INTERVAL_MS) {
-      await recheckManufacturerSitemap(supabaseAdmin, existing.id as string, hostname);
+      const { hasSitemap } = await recheckManufacturerSitemap(supabaseAdmin, existing.id as string, hostname);
+      return { hasSitemap };
     }
-    return;
+    // Not due for a recheck yet — report what's already known for this
+    // manufacturer instead of re-fetching.
+    return { hasSitemap: existing.sitemap_url != null };
   }
 
   const sitemapResult = await discoverAndFetchSitemap(hostname);
@@ -265,13 +269,15 @@ export async function registerOrRecheckManufacturer(
   if (insertError) {
     throw insertError;
   }
+  const hasSitemap = sitemapResult != null;
   // ignoreDuplicates means a concurrent first-time call can win the race
   // and leave this insert with no returned row — nothing left to do then,
   // the other call already owns registering this manufacturer's entries.
   const manufacturerId = manufacturers?.[0]?.id;
   if (!manufacturerId || !sitemapResult || sitemapResult.entries.length === 0) {
-    return;
+    return { hasSitemap };
   }
 
   await insertSitemapEntryRows(supabaseAdmin, manufacturerId, sitemapResult.entries, true);
+  return { hasSitemap };
 }

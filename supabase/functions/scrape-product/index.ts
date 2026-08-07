@@ -387,8 +387,10 @@ Deno.serve(async (req: Request) => {
 
     const nutrition = extractNutritionFromJsonLd(jsonLd) ?? extractNutritionFromPageText(html);
 
+    let hasSitemap = false;
     try {
-      await registerOrRecheckManufacturer(supabaseAdmin, parsedUrl.hostname.replace(/^www\./, ''));
+      const result = await registerOrRecheckManufacturer(supabaseAdmin, parsedUrl.hostname.replace(/^www\./, ''));
+      hasSitemap = result.hasSitemap;
     } catch (manufacturerError) {
       // Best-effort side collection — must never fail the actual scrape.
       console.error('registerOrRecheckManufacturer failed:', manufacturerError);
@@ -402,6 +404,7 @@ Deno.serve(async (req: Request) => {
       imageUrl,
       nutrition,
       sourceUrl: parsedUrl.toString(),
+      hasSitemap,
     });
   } catch (error) {
     return jsonResponse(
