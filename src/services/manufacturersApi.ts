@@ -1,5 +1,5 @@
 import { getSupabase } from './supabaseClient';
-import type { NewSitemapEntry } from '../types/manufacturer';
+import type { ManufacturerSitemapSummary, NewSitemapEntry } from '../types/manufacturer';
 
 // How far back a sitemap entry's first_seen_at may be to still count as
 // "neu gefunden" on the Admin page — matches the product ProductCard's
@@ -45,4 +45,54 @@ export async function fetchNewSitemapEntries(): Promise<NewSitemapEntry[]> {
   // types; the manufacturer_id FK makes it a to-one relationship, and the
   // actual REST response confirms a single object (or null) per row.
   return (data as unknown as SitemapEntryRow[]).map(rowToEntry);
+}
+
+// One row per manufacturer whose sitemap we've actually found (sitemap_url
+// not null — manufacturers where discovery failed have nothing useful to
+// show here). lastNewEntryAt is computed client-side rather than via a SQL
+// aggregate: no generated-columns/RPC layer exists in this project yet, and
+// the entry counts here are small enough that fetching all
+// initial_snapshot=false rows and reducing in JS is simpler than adding one.
+export async function fetchManufacturerSitemapSummaries(): Promise<ManufacturerSitemapSummary[]> {
+  const [manufacturersResult, entriesResult] = await Promise.all([
+    getSupabase()
+      .from('manufacturers')
+      .select('id, hostname, sitemap_url')
+      .not('sitemap_url', 'is', null),
+    getSupabase()
+      .from('manufacturer_sitemap_entries')
+      .select('manufacturer_id, first_seen_at')
+      .eq('initial_snapshot', false)
+      .order('first_seen_at', { ascending: false }),
+  ]);
+
+  if (manufacturersResult.error) {
+    throw new Error(manufacturersResult.error.message);
+  }
+  if (entriesResult.error) {
+    throw new Error(entriesResult.error.message);
+  }
+
+  // Rows arrive newest-first, so the first hit per manufacturer_id is its
+  // most recent "genuinely new" sitemap entry.
+  const lastNewEntryByManufacturerId = new Map<string, string>();
+  for (const row of entriesResult.data as { manufacturer_id: string; first_seen_at: string }[]) {
+    if (!lastNewEntryByManufacturerId.has(row.manufacturer_id)) {
+      lastNewEntryByManufacturerId.set(row.manufacturer_id, row.first_seen_at);
+    }
+  }
+
+  const manufacturers = manufacturersResult.data as { id: string; hostname: string; sitemap_url: string }[];
+  return manufacturers
+    .map((manufacturer) => ({
+      hostname: manufacturer.hostname,
+      sitemapUrl: manufacturer.sitemap_url,
+      lastNewEntryAt: lastNewEntryByManufacturerId.get(manufacturer.id) ?? null,
+    }))
+    .sort((a, b) => {
+      if (!a.lastNewEntryAt && !b.lastNewEntryAt) return a.hostname.localeCompare(b.hostname);
+      if (!a.lastNewEntryAt) return 1;
+      if (!b.lastNewEntryAt) return -1;
+      return b.lastNewEntryAt.localeCompare(a.lastNewEntryAt);
+    });
 }

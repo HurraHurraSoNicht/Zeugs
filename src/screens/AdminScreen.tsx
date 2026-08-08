@@ -17,6 +17,7 @@ import SignalWordFilterBar from '../components/SignalWordFilterBar';
 import { useProducts } from '../hooks/useProducts';
 import { useArticles } from '../hooks/useArticles';
 import { useNewSitemapEntries } from '../hooks/useNewSitemapEntries';
+import { useManufacturerSitemaps } from '../hooks/useManufacturerSitemaps';
 import { useSignalWordFilter } from '../hooks/useSignalWordFilter';
 import { useAutomationSettings } from '../hooks/useAutomationSettings';
 import { scrapeProductFromUrl } from '../services/productScraper';
@@ -26,7 +27,7 @@ import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import type { Product } from '../types/product';
 import type { Article } from '../types/article';
-import type { NewSitemapEntry } from '../types/manufacturer';
+import type { ManufacturerSitemapSummary, NewSitemapEntry } from '../types/manufacturer';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
 
@@ -124,12 +125,47 @@ function NewSitemapEntryRow({ entry }: { entry: NewSitemapEntry }) {
   );
 }
 
+function formatDateTime(isoDate: string): string {
+  const date = new Date(isoDate);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${day}.${month}.${year}, ${hours}:${minutes} Uhr`;
+}
+
+function ManufacturerSitemapRow({ summary }: { summary: ManufacturerSitemapSummary }) {
+  return (
+    <Pressable
+      onPress={() => Linking.openURL(summary.sitemapUrl)}
+      style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}
+    >
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName} numberOfLines={1}>
+          {summary.hostname}
+        </Text>
+        <Text style={styles.resultBrand}>
+          {summary.lastNewEntryAt
+            ? `Zuletzt neue Seite gefunden: ${formatDateTime(summary.lastNewEntryAt)}`
+            : 'Noch keine neue Seite gefunden'}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 type Section = 'products' | 'articles' | 'newProducts' | 'users';
 
 export default function AdminScreen() {
   const { addProduct, editProduct, removeProduct, getProductById } = useProducts();
   const { articles, addArticle, editArticle, removeArticle } = useArticles();
   const { entries: newEntries, loading: newEntriesLoading, error: newEntriesError } = useNewSitemapEntries();
+  const {
+    summaries: manufacturerSitemaps,
+    loading: manufacturerSitemapsLoading,
+    error: manufacturerSitemapsError,
+  } = useManufacturerSitemaps();
   const { signalWords, setSignalWords } = useSignalWordFilter();
   const {
     settings: automationSettings,
@@ -774,6 +810,7 @@ export default function AdminScreen() {
           </View>
         )
       ) : section === 'newProducts' ? (
+        <>
         <View style={styles.form}>
           <Text style={styles.label}>Neue Produkte gefunden</Text>
           <Text style={styles.cooldownHint}>
@@ -831,6 +868,28 @@ export default function AdminScreen() {
             </>
           )}
         </View>
+
+        <View style={styles.form}>
+          <Text style={styles.label}>Gespeicherte Sitemaps</Text>
+          <Text style={styles.cooldownHint}>
+            Hersteller-Domains, für die eine Sitemap gefunden wurde, mit Zeitstempel der zuletzt neu entdeckten Seite.
+          </Text>
+
+          {manufacturerSitemapsLoading ? (
+            <ActivityIndicator color={colors.primary} style={styles.newEntriesLoading} />
+          ) : manufacturerSitemapsError ? (
+            <Text style={[styles.message, styles.messageError]}>{manufacturerSitemapsError}</Text>
+          ) : manufacturerSitemaps.length === 0 ? (
+            <Text style={styles.cooldownHint}>Noch keine Sitemap gespeichert.</Text>
+          ) : (
+            <View style={styles.resultsList}>
+              {manufacturerSitemaps.map((summary) => (
+                <ManufacturerSitemapRow key={summary.hostname} summary={summary} />
+              ))}
+            </View>
+          )}
+        </View>
+        </>
       ) : (
         <View style={styles.form}>
           <Text style={styles.label}>Nutzer suchen</Text>
