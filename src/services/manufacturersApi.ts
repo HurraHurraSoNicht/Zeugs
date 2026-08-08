@@ -1,4 +1,4 @@
-import { getSupabase } from './supabaseClient';
+import { extractFunctionError, getSupabase } from './supabaseClient';
 import type { ManufacturerSitemapSummary, NewSitemapEntry } from '../types/manufacturer';
 
 // How far back a sitemap entry's first_seen_at may be to still count as
@@ -95,4 +95,23 @@ export async function fetchManufacturerSitemapSummaries(): Promise<ManufacturerS
       if (!b.lastNewEntryAt) return -1;
       return b.lastNewEntryAt.localeCompare(a.lastNewEntryAt);
     });
+}
+
+// Registers a domain for daily sitemap tracking without scraping a product
+// from it — goes through the admin-manufacturers Edge Function (service
+// role key), same reasoning as the other admin-* writes: RLS blocks direct
+// inserts into manufacturers for the anon key. Once registered, the domain
+// is picked up by the same daily check-manufacturer-sitemaps cron as any
+// scrape-discovered manufacturer.
+export async function addManufacturerSitemap(
+  url: string,
+): Promise<{ hostname: string; sitemapUrl: string | null; hasSitemap: boolean }> {
+  const { data, error } = await getSupabase().functions.invoke('admin-manufacturers', {
+    body: { url },
+  });
+
+  if (error) {
+    throw new Error(await extractFunctionError(error));
+  }
+  return data as { hostname: string; sitemapUrl: string | null; hasSitemap: boolean };
 }

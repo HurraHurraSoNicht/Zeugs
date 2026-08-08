@@ -20,5 +20,4 @@ export const HOME_CATEGORIES: HomeCategory[] = [
   { id: 'sweets', label: 'Süßes und Kekse', emoji: '🍫', color: '#F9D9E0' },
   { id: 'snacks', label: 'Knabbereien & Chips', emoji: '🍟', color: '#FBF0C4' },
   { id: 'soft-drinks', label: 'Softdrinks & Nullprozentiges', emoji: '🥤', color: '#DCEEFB' },
-  { id: 'beer-wine', label: 'Niedrig- & Hochprozentiges', emoji: '🍻', color: '#F3E3D3' },
 ];

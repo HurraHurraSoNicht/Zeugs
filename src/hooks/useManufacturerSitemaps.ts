@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchManufacturerSitemapSummaries } from '../services/manufacturersApi';
 import type { ManufacturerSitemapSummary } from '../types/manufacturer';
 
@@ -10,28 +10,21 @@ export function useManufacturerSitemaps() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const fetched = await fetchManufacturerSitemapSummaries();
-        if (!cancelled) {
-          setSummaries(fetched);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Sitemaps konnten nicht geladen werden.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const load = useCallback(async () => {
+    try {
+      const fetched = await fetchManufacturerSitemapSummaries();
+      setSummaries(fetched);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sitemaps konnten nicht geladen werden.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { summaries, loading, error };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { summaries, loading, error, refresh: load };
 }

@@ -23,6 +23,7 @@ import { useAutomationSettings } from '../hooks/useAutomationSettings';
 import { scrapeProductFromUrl } from '../services/productScraper';
 import { getProductByBarcode, searchProducts, type OpenFoodFactsSearchResult } from '../services/openFoodFacts';
 import { deleteUserAccount, findUserByEmail, type AdminUser } from '../services/usersApi';
+import { addManufacturerSitemap } from '../services/manufacturersApi';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import type { Product } from '../types/product';
@@ -165,6 +166,7 @@ export default function AdminScreen() {
     summaries: manufacturerSitemaps,
     loading: manufacturerSitemapsLoading,
     error: manufacturerSitemapsError,
+    refresh: refreshManufacturerSitemaps,
   } = useManufacturerSitemaps();
   const { signalWords, setSignalWords } = useSignalWordFilter();
   const {
@@ -512,6 +514,38 @@ export default function AdminScreen() {
   };
 
   const userSearchDisabled = userSearchStatus === 'loading' || !userEmailQuery.trim();
+
+  // Manually register a domain for daily sitemap tracking, without scraping
+  // a product from it (see handleAddFromUrl above for the scrape-triggered
+  // path that also registers a manufacturer as a side effect).
+  const [manufacturerUrl, setManufacturerUrl] = useState('');
+  const [manufacturerAddStatus, setManufacturerAddStatus] = useState<Status>('idle');
+  const [manufacturerAddMessage, setManufacturerAddMessage] = useState<string | null>(null);
+
+  const handleAddManufacturer = async () => {
+    const trimmed = manufacturerUrl.trim();
+    if (!trimmed || manufacturerAddStatus === 'loading') {
+      return;
+    }
+    setManufacturerAddStatus('loading');
+    setManufacturerAddMessage(null);
+    try {
+      const { hostname, hasSitemap } = await addManufacturerSitemap(trimmed);
+      setManufacturerAddStatus('idle');
+      setManufacturerAddMessage(
+        hasSitemap
+          ? `Sitemap für ${hostname} erstellt.`
+          : `Keine Sitemap für ${hostname} gefunden — Domain wird trotzdem täglich geprüft.`,
+      );
+      setManufacturerUrl('');
+      await refreshManufacturerSitemaps();
+    } catch (error) {
+      setManufacturerAddStatus('error');
+      setManufacturerAddMessage(error instanceof Error ? error.message : 'Unbekannter Fehler.');
+    }
+  };
+
+  const manufacturerAddDisabled = manufacturerAddStatus === 'loading' || !manufacturerUrl.trim();
 
   const searchDisabled = searchStatus === 'loading' || !query.trim() || cooldownSeconds > 0;
   const urlDisabled = urlStatus === 'loading' || !url.trim();
@@ -875,6 +909,46 @@ export default function AdminScreen() {
             Hersteller-Domains, für die eine Sitemap gefunden wurde, mit Zeitstempel der zuletzt neu entdeckten Seite.
           </Text>
 
+          <TextInput
+            style={[styles.input, styles.manufacturerInput]}
+            placeholder="https://www.hersteller-domain.de"
+            placeholderTextColor="#999"
+            value={manufacturerUrl}
+            onChangeText={(text) => {
+              setManufacturerUrl(text);
+              if (manufacturerAddStatus !== 'idle') {
+                setManufacturerAddStatus('idle');
+                setManufacturerAddMessage(null);
+              }
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            editable={manufacturerAddStatus !== 'loading'}
+          />
+
+          <Pressable
+            onPress={handleAddManufacturer}
+            disabled={manufacturerAddDisabled}
+            style={({ pressed }) => [
+              styles.button,
+              manufacturerAddDisabled && styles.buttonDisabled,
+              pressed && !manufacturerAddDisabled && styles.buttonPressed,
+            ]}
+          >
+            {manufacturerAddStatus === 'loading' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Hinzufügen</Text>
+            )}
+          </Pressable>
+
+          {manufacturerAddMessage ? (
+            <Text style={[styles.message, manufacturerAddStatus === 'error' && styles.messageError]}>
+              {manufacturerAddMessage}
+            </Text>
+          ) : null}
+
           {manufacturerSitemapsLoading ? (
             <ActivityIndicator color={colors.primary} style={styles.newEntriesLoading} />
           ) : manufacturerSitemapsError ? (
@@ -1027,6 +1101,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     color: colors.text,
     backgroundColor: '#fafafa',
+  },
+  manufacturerInput: {
+    marginTop: 12,
   },
   button: {
     marginTop: 12,
