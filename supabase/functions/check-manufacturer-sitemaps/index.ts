@@ -20,6 +20,21 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { RECHECK_INTERVAL_MS, recheckManufacturerSitemap } from "../_shared/manufacturerSitemap.ts";
 
+// Supabase Edge Functions cap CPU time at 2s per invocation (wall clock is
+// far more generous, but this fleet's regex-heavy sitemap parsing burns CPU,
+// not just network wait time). With one manufacturer's checked_at growing
+// every day, a single invocation trying to walk *all* of them stopped
+// finishing the list once there were enough manufacturers — and since the
+// query had no explicit order, whichever ones landed after the cutoff
+// varied by day, leaving some manufacturers unchecked for days at a time
+// (the bug reported as "manche Websites werden nicht geprüft"). Ordering by
+// "most overdue first" and capping the batch means every invocation makes
+// guaranteed forward progress on whoever has waited longest, so nothing
+// gets starved even if the whole list doesn't fit in one run — see the
+// hourly cron in supabase/migrations/0016_manufacturer_sitemap_check_batching.sql,
+// which now calls this often enough to cover the full list well within a day.
+const BATCH_SIZE = 20;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -54,7 +69,9 @@ Deno.serve(async (req: Request) => {
 
   const { data: manufacturers, error: manufacturersError } = await supabaseAdmin
     .from("manufacturers")
-    .select("id, hostname, sitemap_checked_at");
+    .select("id, hostname, sitemap_checked_at")
+    .order("sitemap_checked_at", { ascending: true, nullsFirst: true })
+    .limit(BATCH_SIZE);
 
   if (manufacturersError) {
     return jsonResponse({ error: manufacturersError.message }, 500);
