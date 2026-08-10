@@ -151,6 +151,11 @@ function ManufacturerSitemapRow({ summary }: { summary: ManufacturerSitemapSumma
             ? `Zuletzt neue Seite gefunden: ${formatDateTime(summary.lastNewEntryAt)}`
             : 'Noch keine neue Seite gefunden'}
         </Text>
+        <Text style={styles.resultBrand}>
+          {summary.lastCheckedAt
+            ? `Zuletzt geprüft: ${formatDateTime(summary.lastCheckedAt)}`
+            : 'Noch nicht geprüft'}
+        </Text>
       </View>
     </Pressable>
   );

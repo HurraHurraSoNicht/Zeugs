@@ -57,7 +57,7 @@ export async function fetchManufacturerSitemapSummaries(): Promise<ManufacturerS
   const [manufacturersResult, entriesResult] = await Promise.all([
     getSupabase()
       .from('manufacturers')
-      .select('id, hostname, sitemap_url')
+      .select('id, hostname, sitemap_url, sitemap_checked_at')
       .not('sitemap_url', 'is', null),
     getSupabase()
       .from('manufacturer_sitemap_entries')
@@ -82,12 +82,18 @@ export async function fetchManufacturerSitemapSummaries(): Promise<ManufacturerS
     }
   }
 
-  const manufacturers = manufacturersResult.data as { id: string; hostname: string; sitemap_url: string }[];
+  const manufacturers = manufacturersResult.data as {
+    id: string;
+    hostname: string;
+    sitemap_url: string;
+    sitemap_checked_at: string | null;
+  }[];
   return manufacturers
     .map((manufacturer) => ({
       hostname: manufacturer.hostname,
       sitemapUrl: manufacturer.sitemap_url,
       lastNewEntryAt: lastNewEntryByManufacturerId.get(manufacturer.id) ?? null,
+      lastCheckedAt: manufacturer.sitemap_checked_at,
     }))
     .sort((a, b) => {
       if (!a.lastNewEntryAt && !b.lastNewEntryAt) return a.hostname.localeCompare(b.hostname);
