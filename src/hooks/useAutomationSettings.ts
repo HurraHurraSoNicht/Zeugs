@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchAutomationSettings, updateSitemapAutoCheckEnabled } from '../services/automationSettingsApi';
+import {
+  fetchAutomationSettings,
+  updateRegistrationEnabled,
+  updateSitemapAutoCheckEnabled,
+} from '../services/automationSettingsApi';
 import type { AutomationSettings } from '../types/automationSettings';
 
-// Only consumed by the Admin screen's "Neue Produkte gefunden" sub-page, so
-// this is a plain fetch-on-mount hook rather than a shared Context like
+// Consumed by the Admin screen's "Neue Produkte gefunden"/"Nutzerverwaltung"
+// sub-pages and by RegisterScreen (to check registrationEnabled), so this is
+// a plain fetch-on-mount hook rather than a shared Context like
 // useProducts/useArticles.
 export function useAutomationSettings() {
   const [settings, setSettings] = useState<AutomationSettings | null>(null);
@@ -51,5 +56,20 @@ export function useAutomationSettings() {
     }
   }, []);
 
-  return { settings, loading, error, saving, setSitemapAutoCheckEnabled };
+  const setRegistrationEnabled = useCallback(async (enabled: boolean) => {
+    setSaving(true);
+    setError(null);
+    setSettings((current) => (current ? { ...current, registrationEnabled: enabled } : current));
+    try {
+      const saved = await updateRegistrationEnabled(enabled);
+      setSettings(saved);
+    } catch (err) {
+      setSettings((current) => (current ? { ...current, registrationEnabled: !enabled } : current));
+      setError(err instanceof Error ? err.message : 'Einstellung konnte nicht gespeichert werden.');
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  return { settings, loading, error, saving, setSitemapAutoCheckEnabled, setRegistrationEnabled };
 }

@@ -6,9 +6,9 @@
 // admin-products: this function (service role key, server-side only) is the
 // sole way the Admin tab's toggle can change automation flags.
 //
-// PUT body: { sitemapAutoCheckEnabled: boolean }
-//   -> updates the singleton settings row, responds with the updated row
-//      (camelCase JSON).
+// PUT body: { sitemapAutoCheckEnabled?: boolean, registrationEnabled?: boolean }
+//   -> updates whichever of those fields is present on the singleton
+//      settings row, responds with the full updated row (camelCase JSON).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -30,8 +30,11 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function rowToSettings(row: { sitemap_auto_check_enabled: boolean }) {
-  return { sitemapAutoCheckEnabled: row.sitemap_auto_check_enabled };
+function rowToSettings(row: { sitemap_auto_check_enabled: boolean; registration_enabled: boolean }) {
+  return {
+    sitemapAutoCheckEnabled: row.sitemap_auto_check_enabled,
+    registrationEnabled: row.registration_enabled,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -42,16 +45,27 @@ Deno.serve(async (req: Request) => {
   try {
     if (req.method === "PUT") {
       const payload = await req.json();
-      if (typeof payload.sitemapAutoCheckEnabled !== "boolean") {
-        return jsonResponse({ error: 'Feld "sitemapAutoCheckEnabled" fehlt oder ist ungültig.' }, 400);
+      const update: Record<string, unknown> = {};
+      if (payload.sitemapAutoCheckEnabled !== undefined) {
+        if (typeof payload.sitemapAutoCheckEnabled !== "boolean") {
+          return jsonResponse({ error: 'Feld "sitemapAutoCheckEnabled" ist ungültig.' }, 400);
+        }
+        update.sitemap_auto_check_enabled = payload.sitemapAutoCheckEnabled;
       }
+      if (payload.registrationEnabled !== undefined) {
+        if (typeof payload.registrationEnabled !== "boolean") {
+          return jsonResponse({ error: 'Feld "registrationEnabled" ist ungültig.' }, 400);
+        }
+        update.registration_enabled = payload.registrationEnabled;
+      }
+      if (Object.keys(update).length === 0) {
+        return jsonResponse({ error: "Kein gültiges Feld zum Aktualisieren übergeben." }, 400);
+      }
+      update.updated_at = new Date().toISOString();
 
       const { data, error } = await supabaseAdmin
         .from("automation_settings")
-        .update({
-          sitemap_auto_check_enabled: payload.sitemapAutoCheckEnabled,
-          updated_at: new Date().toISOString(),
-        })
+        .update(update)
         .eq("id", 1)
         .select()
         .single();

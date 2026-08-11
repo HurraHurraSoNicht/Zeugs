@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import TurnstileWidget from '../components/TurnstileWidget';
 import { useAuth } from '../hooks/useAuth';
+import { useAutomationSettings } from '../hooks/useAutomationSettings';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import type { RootStackScreenProps } from '../types/navigation';
@@ -16,6 +17,7 @@ const TURNSTILE_SITE_KEY = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
 export default function RegisterScreen({ navigation }: Props) {
   const { signUp } = useAuth();
+  const { settings: automationSettings, loading: automationSettingsLoading } = useAutomationSettings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,34 @@ export default function RegisterScreen({ navigation }: Props) {
       setLoading(false);
     }
   };
+
+  if (automationSettingsLoading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (automationSettings && !automationSettings.registrationEnabled) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.content}>
+          <View style={styles.logoWrap}>
+            <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+          </View>
+          <Text style={styles.confirmTitle}>Wartungsmodus</Text>
+          <Text style={styles.welcomeText}>
+            Eine Registrierung ist im Moment nicht möglich, Snakkers ist im Wartungsmodus.
+          </Text>
+          <Pressable onPress={() => navigation.navigate('Login')} style={styles.registerLink}>
+            <Text style={styles.registerLinkText}>Du hast schon einen Account?</Text>
+            <Text style={styles.registerLinkTextBold}>Jetzt einloggen</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (confirmationEmail) {
     return (
@@ -163,6 +193,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     flexGrow: 1,

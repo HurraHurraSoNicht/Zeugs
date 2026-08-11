@@ -179,6 +179,7 @@ export default function AdminScreen() {
     loading: automationSettingsLoading,
     saving: automationSettingsSaving,
     setSitemapAutoCheckEnabled,
+    setRegistrationEnabled,
   } = useAutomationSettings();
   const [dismissedEntryIds, setDismissedEntryIds] = useState<Set<string>>(new Set());
   const signalFilteredEntries = useMemo(() => {
@@ -970,6 +971,29 @@ export default function AdminScreen() {
         </View>
         </>
       ) : (
+        <>
+        <View style={styles.form}>
+          <Text style={styles.label}>Registrierung</Text>
+          <View style={styles.automationRow}>
+            <View style={styles.automationTextWrap}>
+              <Text style={styles.automationLabel}>Registrierung aktiv</Text>
+              <Text style={styles.automationHint}>
+                Deaktiviert zeigt die Registrierungsseite nur einen Wartungshinweis, kein Formular.
+              </Text>
+            </View>
+            {automationSettingsLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Switch
+                value={automationSettings?.registrationEnabled ?? false}
+                onValueChange={setRegistrationEnabled}
+                disabled={automationSettingsSaving || !automationSettings}
+                trackColor={{ true: colors.primary }}
+              />
+            )}
+          </View>
+        </View>
+
         <View style={styles.form}>
           <Text style={styles.label}>Nutzer suchen</Text>
           <TextInput
@@ -1034,6 +1058,7 @@ export default function AdminScreen() {
             </View>
           ) : null}
         </View>
+        </>
       )}
     </ScrollView>
   );

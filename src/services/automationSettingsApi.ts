@@ -3,10 +3,14 @@ import type { AutomationSettings } from '../types/automationSettings';
 
 interface AutomationSettingsRow {
   sitemap_auto_check_enabled: boolean;
+  registration_enabled: boolean;
 }
 
 function rowToSettings(row: AutomationSettingsRow): AutomationSettings {
-  return { sitemapAutoCheckEnabled: row.sitemap_auto_check_enabled };
+  return {
+    sitemapAutoCheckEnabled: row.sitemap_auto_check_enabled,
+    registrationEnabled: row.registration_enabled,
+  };
 }
 
 // Reads are publicly allowed by RLS (see supabase/migrations/
@@ -15,7 +19,7 @@ function rowToSettings(row: AutomationSettingsRow): AutomationSettings {
 export async function fetchAutomationSettings(): Promise<AutomationSettings> {
   const { data, error } = await getSupabase()
     .from('automation_settings')
-    .select('sitemap_auto_check_enabled')
+    .select('sitemap_auto_check_enabled, registration_enabled')
     .eq('id', 1)
     .single();
 
@@ -32,6 +36,18 @@ export async function updateSitemapAutoCheckEnabled(enabled: boolean): Promise<A
   const { data, error } = await getSupabase().functions.invoke('admin-settings', {
     method: 'PUT',
     body: { sitemapAutoCheckEnabled: enabled },
+  });
+
+  if (error) {
+    throw new Error(await extractFunctionError(error));
+  }
+  return data as AutomationSettings;
+}
+
+export async function updateRegistrationEnabled(enabled: boolean): Promise<AutomationSettings> {
+  const { data, error } = await getSupabase().functions.invoke('admin-settings', {
+    method: 'PUT',
+    body: { registrationEnabled: enabled },
   });
 
   if (error) {
