@@ -23,7 +23,7 @@ import { useAutomationSettings } from '../hooks/useAutomationSettings';
 import { scrapeProductFromUrl } from '../services/productScraper';
 import { getProductByBarcode, searchProducts, type OpenFoodFactsSearchResult } from '../services/openFoodFacts';
 import { deleteUserAccount, findUserByEmail, type AdminUser } from '../services/usersApi';
-import { addManufacturerSitemap } from '../services/manufacturersApi';
+import { addManufacturerSitemap, dismissNewSitemapEntries } from '../services/manufacturersApi';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import type { Product } from '../types/product';
@@ -182,6 +182,8 @@ export default function AdminScreen() {
     setRegistrationEnabled,
   } = useAutomationSettings();
   const [dismissedEntryIds, setDismissedEntryIds] = useState<Set<string>>(new Set());
+  const [clearingNewEntries, setClearingNewEntries] = useState(false);
+  const [clearNewEntriesError, setClearNewEntriesError] = useState<string | null>(null);
   const signalFilteredEntries = useMemo(() => {
     if (signalWords.length === 0) {
       return newEntries;
@@ -195,10 +197,27 @@ export default function AdminScreen() {
     () => signalFilteredEntries.filter((entry) => !dismissedEntryIds.has(entry.id)),
     [signalFilteredEntries, dismissedEntryIds],
   );
-  const handleClearNewEntries = () => {
-    setDismissedEntryIds(
-      (current) => new Set([...current, ...signalFilteredEntries.map((entry) => entry.id)]),
-    );
+  const handleClearNewEntries = async () => {
+    if (clearingNewEntries || visibleNewEntries.length === 0) {
+      return;
+    }
+    const idsToClear = signalFilteredEntries.map((entry) => entry.id);
+    setClearingNewEntries(true);
+    setClearNewEntriesError(null);
+    // Optimistic — hides immediately, rolled back below if the write fails.
+    setDismissedEntryIds((current) => new Set([...current, ...idsToClear]));
+    try {
+      await dismissNewSitemapEntries(idsToClear);
+    } catch (error) {
+      setDismissedEntryIds((current) => {
+        const next = new Set(current);
+        idsToClear.forEach((id) => next.delete(id));
+        return next;
+      });
+      setClearNewEntriesError(error instanceof Error ? error.message : 'Löschen fehlgeschlagen.');
+    } finally {
+      setClearingNewEntries(false);
+    }
   };
 
   const [section, setSection] = useState<Section>('products');
@@ -888,10 +907,21 @@ export default function AdminScreen() {
                 <>
                   <Pressable
                     onPress={handleClearNewEntries}
-                    style={({ pressed }) => [styles.clearButton, pressed && styles.clearButtonPressed]}
+                    disabled={clearingNewEntries}
+                    style={({ pressed }) => [
+                      styles.clearButton,
+                      pressed && !clearingNewEntries && styles.clearButtonPressed,
+                    ]}
                   >
-                    <Text style={styles.clearButtonText}>Alle löschen</Text>
+                    {clearingNewEntries ? (
+                      <ActivityIndicator color={colors.textMuted} />
+                    ) : (
+                      <Text style={styles.clearButtonText}>Alle löschen</Text>
+                    )}
                   </Pressable>
+                  {clearNewEntriesError ? (
+                    <Text style={[styles.message, styles.messageError]}>{clearNewEntriesError}</Text>
+                  ) : null}
                   <View style={styles.resultsList}>
                     {visibleNewEntries.map((entry) => (
                       <NewSitemapEntryRow key={entry.id} entry={entry} />

@@ -35,6 +35,7 @@ export async function fetchNewSitemapEntries(): Promise<NewSitemapEntry[]> {
     .from('manufacturer_sitemap_entries')
     .select('id, url, lastmod, first_seen_at, manufacturers(hostname)')
     .eq('initial_snapshot', false)
+    .is('dismissed_at', null)
     .gte('first_seen_at', cutoff)
     .order('first_seen_at', { ascending: false });
 
@@ -45,6 +46,20 @@ export async function fetchNewSitemapEntries(): Promise<NewSitemapEntry[]> {
   // types; the manufacturer_id FK makes it a to-one relationship, and the
   // actual REST response confirms a single object (or null) per row.
   return (data as unknown as SitemapEntryRow[]).map(rowToEntry);
+}
+
+// Persists "Alle löschen" so cleared URLs stay gone across reloads instead
+// of just being hidden in local component state — see admin-sitemap-entries
+// and migration 0019_sitemap_entry_dismissal.sql.
+export async function dismissNewSitemapEntries(ids: string[]): Promise<void> {
+  const { error } = await getSupabase().functions.invoke('admin-sitemap-entries', {
+    method: 'DELETE',
+    body: { ids },
+  });
+
+  if (error) {
+    throw new Error(await extractFunctionError(error));
+  }
 }
 
 // One row per manufacturer whose sitemap we've actually found (sitemap_url
